@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+fastmcp
+python-dotenv
+httpx
+pydantic
+playwright
+crawl4ai

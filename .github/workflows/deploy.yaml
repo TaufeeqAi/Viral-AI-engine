@@ -1,0 +1,208 @@
+name: Deploy to KinD Kubernetes
+
+on:
+  push:
+    branches:
+      - main # Trigger on push to the main branch
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12' 
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install KinD and kubectl
+        run: |
+          # Install kubectl
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+          # Install KinD
+          [ "$(uname -m)" = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/
+
+      - name: Create KinD Cluster
+        run: |
+          kind create cluster --config k8s/kind-cluster.yaml --name multi-agent-bot-cluster
+          kubectl cluster-info --context kind-multi-agent-bot-cluster
+
+      - name: Build and Load Docker Images into KinD
+        # This step loads images into the KinD cluster
+        run: |
+          # Build bot image
+          docker build -t multi-agent-bot/bot:latest -f bot/Dockerfile .
+          kind load docker-image multi-agent-bot/bot:latest --name multi-agent-bot-cluster
+
+          # Build fastmcp-core image
+          docker build -t multi-agent-bot/fastmcp-core:latest -f Dockerfile.fastmcp_core .
+          kind load docker-image multi-agent-bot/fastmcp-core:latest --name multi-agent-bot-cluster
+
+          # Build rag-data-loader image
+          docker build -t multi-agent-bot/rag-data-loader:latest -f Dockerfile.rag_data_loader .
+          kind load docker-image multi-agent-bot/rag-data-loader:latest --name multi-agent-bot-cluster
+
+          # Build base-mcp image (if it's a base for others, otherwise remove)
+          docker build -t multi-agent-bot/base-mcp:latest -f mcp-servers/base-mcp/Dockerfile.base .
+          kind load docker-image multi-agent-bot/base-mcp:latest --name multi-agent-bot-cluster
+
+          # Build specialized MCP server images
+          for mcp_dir in web-mcp finance-mcp rag-mcp telegram-mcp discord-mcp; do
+            docker build -t multi-agent-bot/$mcp_dir:latest -f mcp-servers/$mcp_dir/Dockerfile .
+            kind load docker-image multi-agent-bot/$mcp_dir:latest --name multi-agent-bot-cluster
+          done
+        env:
+          DOCKER_BUILDKIT: 1 # Enable BuildKit for better performance
+
+      - name: Create Kubernetes Secrets and ConfigMaps
+        # This step dynamically creates secrets.yaml and configmaps.yaml
+        # using GitHub Secrets for sensitive data.
+        run: |
+          # Create k8s/secrets.yaml
+          cat <<EOF > k8s/secrets.yaml
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: bot-secrets
+            namespace: multi-agent-bot
+          type: Opaque
+          stringData:
+            GROQ_API_KEY: "${{ secrets.GROQ_API_KEY }}"
+            # Add Discord bot tokens for each agent that uses Discord
+            DISCORD_BOT_TOKEN_AGENTZ: "${{ secrets.DISCORD_BOT_TOKEN_AGENTZ }}"
+            # Add Telegram API credentials for each agent that uses Telegram
+            TELEGRAM_BOT_TOKEN_AGENTX: "${{ secrets.TELEGRAM_BOT_TOKEN_AGENTX }}"
+            TELEGRAM_API_ID_AGENTX: "${{ secrets.TELEGRAM_API_ID_AGENTX }}"
+            TELEGRAM_API_HASH_AGENTX: "${{ secrets.TELEGRAM_API_HASH_AGENTX }}"
+            # Add other secrets as needed (e.g., for other MCPs if they need external API keys)
+          ---
+          # Add other secrets here if needed, e.g., for specific MCPs
+          EOF
+
+          # Create k8s/configmaps.yaml
+          cat <<EOF > k8s/configmaps.yaml
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: bot-config
+            namespace: multi-agent-bot
+          data:
+            LOCAL_MODE: "false" # Set to false for Kubernetes deployment
+            SQLITE_DB_PATH: "agents.db"
+            BOT_API_BASE_URL: "http://bot-api-svc.multi-agent-bot.svc.cluster.local:8000"
+            # Add other config data here if needed
+          EOF
+
+      - name: Deploy Kubernetes Manifests
+        run: |
+          kubectl apply -f k8s/namespaces.yaml
+          kubectl apply -f k8s/secrets.yaml
+          kubectl apply -f k8s/configmaps.yaml
+          kubectl apply -f k8s/persistentvolumeclaims/rag-pvc.yaml
+          kubectl apply -f k8s/deployments/
+          kubectl apply -f k8s/services/
+          kubectl apply -f k8s/ingress/ # Apply ingress if you have an ingress controller in kind
+          kubectl get all -n multi-agent-bot
+
+      - name: Wait for Pods to be Ready
+        timeout-minutes: 5 # Adjust as needed
+        run: |
+          kubectl wait --for=condition=ready pod -l app=bot-api -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=fastmcp-core -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=web-mcp -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=finance-mcp -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=rag-mcp -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=telegram-mcp -n multi-agent-bot --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=discord-mcp -n multi-agent-bot --timeout=300s
+          echo "All core pods are ready."
+
+      - name: Run RAG Data Loader Job
+        run: |
+          kubectl apply -f k8s/jobs/rag-data-loader-job.yaml -n multi-agent-bot
+          kubectl wait --for=condition=complete job/rag-data-loader -n multi-agent-bot --timeout=600s
+          echo "RAG data loader job completed."
+
+      - name: Setup Telegram Webhooks (for agents created after deployment)
+        # This step will port-forward the telegram-mcp service, start ngrok,
+        # and then run your setup_webhooks.sh script.
+        run: |
+          # Port-forward telegram-mcp service to a local port on the runner
+          # Choose a free port, e.g., 9003
+          kubectl port-forward service/telegram-mcp-svc 9003:9003 -n multi-agent-bot > /dev/null 2>&1 &
+          TELEGRAM_PF_PID=$!
+          echo "Telegram port-forward started with PID: $TELEGRAM_PF_PID"
+          sleep 5 # Give port-forward a moment to establish
+
+          # Start ngrok for the port-forwarded service
+          # Use a stable ngrok URL if you have a paid account, otherwise it will be random
+          NGROK_AUTH_TOKEN="${{ secrets.NGROK_AUTH_TOKEN }}"
+          if [ -n "$NGROK_AUTH_TOKEN" ]; then
+            ./ngrok authtoken "$NGROK_AUTH_TOKEN"
+          else
+            echo "NGROK_AUTH_TOKEN not set. Using free tier, URL will be random."
+          fi
+          
+          # Download ngrok binary
+          curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
+          unzip ngrok.zip
+          chmod +x ngrok
+
+          ./ngrok http 9003 > /dev/null 2>&1 &
+          NGROK_PID=$!
+          echo "ngrok started with PID: $NGROK_PID"
+          sleep 10 # Give ngrok time to establish tunnel
+
+          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+          if [ -z "$NGROK_URL" ] || [ "$NGROK_URL" = "null" ]; then
+            echo "Error: Could not get ngrok public URL. Check ngrok logs or status."
+            kill $TELEGRAM_PF_PID || true
+            kill $NGROK_PID || true
+            exit 1
+          fi
+          echo "ngrok public URL: $NGROK_URL"
+
+          # Run your setup_webhooks.sh script with the dynamic ngrok URL
+          chmod +x scripts/setup_webhooks.sh
+          # Pass the ngrok URL and bot tokens as environment variables to the script
+          # Modify setup_webhooks.sh to accept these as arguments or env vars
+          TELEGRAM_BOT_TOKEN_1="${{ secrets.TELEGRAM_BOT_TOKEN_AGENTX }}"
+          TELEGRAM_BOT_TOKEN_2="${{ secrets.TELEGRAM_BOT_TOKEN_AGENTZ }}" # Assuming AgentZ also has a Telegram bot
+          
+          ./scripts/setup_webhooks.sh "$NGROK_URL" "$TELEGRAM_BOT_TOKEN_1" "$TELEGRAM_BOT_TOKEN_2"
+
+          # Clean up ngrok and port-forward processes
+          kill $TELEGRAM_PF_PID || true
+          kill $NGROK_PID || true
+          echo "ngrok and port-forward processes terminated."
+        env:
+          
+      - name: Run Integration Tests (Optional)
+        # Add the integration tests here.
+
+        run: |
+          echo "Running integration tests..."
+          # Example: python -m pytest tests/
+          # For testing external access, you might need to expose services via ingress
+          # and use a public URL, or run tests within the cluster.
+          echo "Integration tests complete (placeholder)."
+
+    # Ensures cleanup happens even if previous steps fail
+
+    # - name: Cleanup KinD Cluster
+    #   if: always()
+    #   run: kind delete cluster --name multi-agent-bot-cluster

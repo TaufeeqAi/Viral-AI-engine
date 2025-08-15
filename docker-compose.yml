@@ -1,0 +1,90 @@
+services:
+  bot-api:
+    build:
+      context: ./agent
+    container_name: bot-api
+    ports:
+      - "8000:8000"
+    environment:
+      - LOCAL_MODE=false
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - BOT_API_BASE_URL=http://bot-api:8000
+      - DISCORD_EVENTS_ENDPOINT=http://bot-api:8000/discord/receive_message
+      - SQLITE_DB_PATH=/app/data/agents.db
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - web-mcp
+      - finance-mcp
+      - rag-mcp
+      - telegram-mcp
+      - discord-mcp
+
+  web-mcp:
+    build:
+      context: ./web-mcp
+    container_name: web-mcp
+    ports:
+      - "9000:9000"
+    environment:
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+      - SERPAPI_KEY=${SERPAPI_KEY}
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - STACKEXCHANGE_KEY=${STACKEXCHANGE_KEY}
+      - NEWSAPI_KEY=${NEWSAPI_KEY}
+
+  finance-mcp:
+    build:
+      context: ./finance-mcp
+    container_name: finance-mcp
+    ports:
+      - "9001:9001"
+    environment:
+      - FINNHUB_API_KEY=${FINNHUB_API_KEY}
+      - QUANDL_API_KEY=${QUANDL_API_KEY}
+
+
+  rag-mcp:
+    build:
+      context: ./rag-mcp
+    container_name: rag-mcp
+    ports:
+      - "9002:9002"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+    volumes:
+      - chroma-data:/app/chroma
+
+  discord-mcp:
+    build:
+      context: ./discord-mcp
+    container_name: discord-mcp
+    ports:
+      - "9004:9004"
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+
+  telegram-mcp:
+    build:
+      context: ./telegram-mcp
+    container_name: telegram-mcp
+    ports:
+      - "9003:9003"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: streamlit-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - FRONTEND_FASTAPI_URL=http://bot-api:8000 
+    depends_on:
+      - bot-api
+
+volumes:
+  chroma-data:

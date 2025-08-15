@@ -1,0 +1,49 @@
+# Core web frameworks and servers
+fastapi
+starlette
+uvicorn[standard]
+httpx
+
+# MCP (Model Context Protocol)
+fastmcp 
+
+# Agent Framework
+langchain-mcp-adapters
+langgraph
+
+# Langchain and LLM integration (core components only, no specific integrations)
+langchain
+langchain-community
+langchain-core
+langchain-groq
+
+# Environment management
+python-dotenv
+discord.py
+telethon
+langchain_chroma
+sentence_transformers
+langchain_huggingface
+
+
+#llm
+langchain_ollama
+langchain_openai
+langchain_google_genai 
+langchain_anthropic
+
+##auth
+python-jose[cryptography]
+sqlalchemy
+asyncpg
+psycopg2-binary
+alembic
+passlib[bcrypt]
+python-multipart
+email-validator
+sqlalchemy[asyncio]
+
+
+##crawler
+playwright
+crawl4ai
