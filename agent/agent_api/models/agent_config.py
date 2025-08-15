@@ -24,11 +24,6 @@ class AgentSecrets(BaseModel):
     telegram_api_id: Optional[int] = None
     telegram_api_hash: Optional[str] = None
     telegram_bot_token: Optional[str] = None
-    serpapi_api_key: Optional[str] = None
-    newsapi_org_api_key: Optional[str] = None
-    finnhub_api_key: Optional[str] = None
-    quandl_api_key: Optional[str] = None
-    cohere_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
     google_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
@@ -40,7 +35,6 @@ class Settings(BaseModel):
     temperature: float = Field(0.7, description="Temperature for LLM generation.")
     maxTokens: int = Field(8192, description="Maximum number of tokens for LLM generation.")
     secrets: AgentSecrets = Field(default_factory=AgentSecrets)
-    voice: Optional[Dict[str, str]] = Field(None, description="Voice model settings.")
 
     class Config:
         populate_by_name = True
@@ -60,20 +54,11 @@ class AgentConfig(BaseModel):
     bio: Optional[List[str]] = Field(None, description="A list of biography points.")
     lore: Optional[List[str]] = Field(None, description="Lore and background information as a list.")
     knowledge: Optional[List[str]] = Field(None, description="Specific knowledge points as a list.")
-    
-    # New fields for agent usage statistics
+    allowed_tool_names: Optional[List[str]] = Field(None, description="A list of tool names this agent is allowed to use.")
     lastUsed: Optional[datetime] = Field(None, description="Timestamp of when the agent was last used.")
     totalSessions: Optional[int] = Field(0, description="Total number of chat sessions initiated with this agent.")
-
-    # New field to represent the agent's tools
     tools: Optional[List[AgentTool]] = Field(None, description="A list of tools associated with this agent, and their enabled status.")
     
-    messageExamples: Optional[Union[List[Dict[str, Any]], List[List[Dict[str, Any]]]]] = Field(
-        None, 
-        description="Examples of messages for the agent. Can be flat list or nested list format."
-    )
-    style: Optional[Union[str, Dict[str, List[str]]]] = Field(None, description="Stylistic guidelines for the agent's responses.")
-
     class Config:
         populate_by_name = True
         extra = "forbid" # Keep as forbid for strict validation

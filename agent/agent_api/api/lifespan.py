@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     app.state.db_manager = db_manager_instance
     logger.info("PostgreSQL connection pool initialized and stored in app state.")
     
-    # Initialize agent manager
+    # Initialize agent manager with the PostgresManager (not the repository)
     agent_manager_instance = AgentManager(db_manager_instance)
     app.state.agent_manager = agent_manager_instance
 
@@ -48,10 +48,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize MCP client: {e}", exc_info=True)
         app.state.mcp_client = None
 
-    # Initialize all agents from database
+    # Initialize all agents from the config file and persist to database
     try:
-        await app.state.agent_manager.initialize_all_agents_from_db(LOCAL_MODE)
-        logger.info("All agents initialized from the database on startup.")
+        # NOTE: The method name has been corrected here.
+        await app.state.agent_manager.initialize_agents_from_config(LOCAL_MODE)
+        logger.info("All agents initialized from config and saved to database on startup.")
     except Exception as e:
         logger.error(f"Failed to initialize agents on startup: {e}", exc_info=True)
 

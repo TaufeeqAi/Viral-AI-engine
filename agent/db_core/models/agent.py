@@ -20,12 +20,13 @@ class Agent(Base):
     bio = Column(JSON)
     lore = Column(JSON)
     knowledge = Column(JSON)
-    message_examples = Column(JSON)
-    style = Column(JSON)
 
     # Add the missing columns for agent usage statistics
     last_used = Column(DateTime(timezone=True), server_default=func.now())
     total_sessions = Column(Integer, default=0)
+
+    # Added the new column for allowed tool names
+    allowed_tool_names = Column(JSON)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

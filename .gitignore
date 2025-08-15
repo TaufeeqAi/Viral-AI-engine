@@ -9,6 +9,7 @@ test.py
 web_venv/
 .env
 agent/.env
+resources/
 
 # Python
 ##########
