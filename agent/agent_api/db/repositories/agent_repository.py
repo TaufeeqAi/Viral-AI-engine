@@ -21,8 +21,6 @@ class AgentRepository(BaseRepository):
     async def get_by_name(self, agent_name: str) -> Optional[AgentConfig]:
         """Fetches a single agent configuration from the database by its name."""
         logger.info(f"Fetching agent configuration for name: {agent_name}")
-        # The query has been updated to fetch all fields to build the complete AgentConfig.
-        # This makes the behavior consistent with get_by_id.
         record = await self._fetch_one("""
             SELECT
                 a.id, a.user_id, a.name, a.model_provider, a.settings,
@@ -161,21 +159,35 @@ class AgentRepository(BaseRepository):
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 # 1. Upsert agent configuration
-                # Use uuid.uuid4() for a new agent, otherwise use the existing ID
+                # Use a new UUID for a new agent, otherwise use the existing ID.
                 agent_id = str(uuid.uuid4()) if not config.id else config.id
                 
+                # Check for an existing agent by name to get its ID for the upsert operation.
+                # This handles the unique constraint on 'name' correctly.
+                existing_agent = await self.get_by_name(config.name)
+                if existing_agent:
+                    agent_id = existing_agent.id
+                    logger.info(f"Agent with name '{config.name}' already exists. Using ID: {agent_id}")
+
                 allowed_tool_names_json = json.dumps(config.allowed_tool_names) if config.allowed_tool_names is not None else '[]'
 
                 await conn.execute("""
                     INSERT INTO agents (id, user_id, name, model_provider, settings, system, bio, lore, knowledge, last_used, total_sessions, allowed_tool_names, created_at, updated_at)
                     VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11, $12::jsonb, NOW(), NOW())
-                    ON CONFLICT (id) DO UPDATE SET
-                        user_id = EXCLUDED.user_id, name = EXCLUDED.name, model_provider = EXCLUDED.model_provider,
-                        settings = EXCLUDED.settings, system = EXCLUDED.system,
-                        bio = EXCLUDED.bio, lore = EXCLUDED.lore, knowledge = EXCLUDED.knowledge,
-                        last_used = EXCLUDED.last_used, total_sessions = EXCLUDED.total_sessions,
+                    ON CONFLICT (name) DO UPDATE SET
+                        user_id = EXCLUDED.user_id,
+                        name = EXCLUDED.name,
+                        model_provider = EXCLUDED.model_provider,
+                        settings = EXCLUDED.settings,
+                        system = EXCLUDED.system,
+                        bio = EXCLUDED.bio,
+                        lore = EXCLUDED.lore,
+                        knowledge = EXCLUDED.knowledge,
+                        last_used = EXCLUDED.last_used,
+                        total_sessions = EXCLUDED.total_sessions,
                         allowed_tool_names = EXCLUDED.allowed_tool_names,
-                        updated_at = NOW();
+                        updated_at = NOW()
+                    RETURNING id;
                     """,
                     agent_id, config.user_id, config.name, config.modelProvider,
                     json.dumps(config.settings.model_dump(exclude_none=True)), config.system,
@@ -369,3 +381,4 @@ class AgentRepository(BaseRepository):
             ]
             if rows:
                 await conn.executemany(insert_query, rows)
+

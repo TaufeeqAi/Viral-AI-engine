@@ -1,5 +1,3 @@
-# mcp_servers/social_mcp/tools/reddit_tools.py
-
 import os
 import logging
 from typing import Dict, Any, List
@@ -7,6 +5,9 @@ from pydantic import BaseModel, HttpUrl, Field
 import praw
 from praw.exceptions import RedditAPIException
 from fastmcp import FastMCP
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- Logging Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -22,17 +23,44 @@ class RedditClient:
         self._reddit = self._initialize_client()
 
     def _initialize_client(self):
-        """Initializes the PRAW client from environment variables."""
+        """Initializes the PRAW client from environment variables with detailed logging."""
         try:
+            # Log the start of the environment variable check
+            logger.info("Attempting to load Reddit API environment variables...")
+
             client_id = os.getenv("REDDIT_CLIENT_ID")
+            logger.debug(f"REDDIT_CLIENT_ID: {'Found' if client_id else 'Missing'}")
+
             client_secret = os.getenv("REDDIT_CLIENT_SECRET")
+            logger.debug(f"REDDIT_CLIENT_SECRET: {'Found' if client_secret else 'Missing'}")
+
             user_agent = os.getenv("REDDIT_USER_AGENT")
+            logger.debug(f"REDDIT_USER_AGENT: {'Found' if user_agent else 'Missing'}")
+            
             username = os.getenv("REDDIT_USERNAME")
+            logger.debug(f"REDDIT_USERNAME: {'Found' if username else 'Missing'}")
+            
             password = os.getenv("REDDIT_PASSWORD")
+            logger.debug(f"REDDIT_PASSWORD: {'Found' if password else 'Missing'}")
 
             if not all([client_id, client_secret, user_agent, username, password]):
-                raise ValueError("Missing one or more required Reddit API environment variables.")
+                # Log a more specific error message when variables are missing
+                missing_vars = [
+                    name for name, val in {
+                        "REDDIT_CLIENT_ID": client_id,
+                        "REDDIT_CLIENT_SECRET": client_secret,
+                        "REDDIT_USER_AGENT": user_agent,
+                        "REDDIT_USERNAME": username,
+                        "REDDIT_PASSWORD": password
+                    }.items() if not val
+                ]
+                error_msg = f"Missing required Reddit API environment variables: {', '.join(missing_vars)}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
+            logger.info("All required Reddit API environment variables found. Initializing PRAW client...")
+            
+            # Use await praw.Reddit for async operations
             return praw.Reddit(
                 client_id=client_id,
                 client_secret=client_secret,
@@ -41,6 +69,8 @@ class RedditClient:
                 password=password
             )
         except Exception as e:
+            # The catch-all is still useful for unexpected errors, but the
+            # specific `ValueError` should now provide a clearer message.
             logger.error(f"Failed to initialize PRAW client: {e}")
             return None
     
@@ -56,6 +86,7 @@ try:
     reddit_manager = RedditClient()
     reddit_client = reddit_manager.client
 except (ValueError, RuntimeError) as e:
+    # This log is a good final check to see if the module failed to load.
     logger.error(f"Application cannot start without a working Reddit client: {e}")
     reddit_client = None  # Explicitly set to None if initialization fails
 
@@ -87,13 +118,13 @@ class StrategicPost(BaseModel):
 
 class ReplyResponse(BaseModel):
     status: str
+    comment_id: str = Field(..., description="The ID of the newly created comment.")
 
 # --- Tool Registration ---
 def register_reddit_tools(mcp: FastMCP):
     """
     Registers all Reddit-related tools with the FastMCP instance.
     """
-    
     if not reddit_client:
         logger.warning("Skipping Reddit tool registration due to PRAW client initialization failure.")
         return
@@ -277,3 +308,4 @@ def register_reddit_tools(mcp: FastMCP):
         formatted_metrics = ", ".join([f"{k.capitalize()}: {v}" for k, v in metrics.items()])
         formatted_response = f"{original_text}\n\n---\n**Metrics:** {formatted_metrics}"
         return formatted_response
+

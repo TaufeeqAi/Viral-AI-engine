@@ -1,5 +1,3 @@
-# mcp_servers/social_mcp/tools/twitter_tools.py
-
 import asyncio
 import logging
 import os
@@ -37,7 +35,8 @@ class TwitterClient:
             logger.error(f"Failed to initialize Twitter clients: {e}")
 
     def _initialize_clients(self):
-        """Initializes both Twitter API v2 and v1.1 clients."""
+        """Initializes both Twitter API v2 and v1.1 clients with detailed logging."""
+        logger.info("Attempting to load Twitter API environment variables...")
         required_env_vars = [
             "TWITTER_API_KEY",
             "TWITTER_API_SECRET",
@@ -45,8 +44,22 @@ class TwitterClient:
             "TWITTER_ACCESS_TOKEN_SECRET",
             "TWITTER_BEARER_TOKEN",
         ]
-        if not all(os.getenv(var) for var in required_env_vars):
-            raise EnvironmentError("Missing one or more required Twitter API environment variables.")
+        
+        missing_vars = []
+        for var in required_env_vars:
+            value = os.getenv(var)
+            if not value:
+                missing_vars.append(var)
+                logger.debug(f"{var}: Missing")
+            else:
+                logger.debug(f"{var}: Found")
+
+        if missing_vars:
+            error_msg = f"Missing one or more required Twitter API environment variables: {', '.join(missing_vars)}."
+            logger.error(error_msg)
+            raise EnvironmentError(error_msg)
+
+        logger.info("All required Twitter API environment variables found. Initializing Tweepy clients...")
 
         self._v2_client = tweepy.Client(
             consumer_key=os.getenv("TWITTER_API_KEY"),
@@ -85,15 +98,17 @@ def register_twitter_tools(mcp):
     """
     Registers all Twitter-related tools with the FastMCP instance.
     """
+    # This check is not needed as the client initialization handles the failure.
+    # The RuntimeError is now raised if a tool is called without a valid client.
 
     # --- User Management Tools ---
-    @mcp.tool(name="get_user_profile", description="Get detailed profile information for a user by their user ID.")
-    async def get_user_profile(user_id: str) -> Dict[str, Any]:
+    @mcp.tool(name="get_twitter_user_profile", description="Get detailed profile information for a user by their user ID.")
+    async def get_twitter_user_profile(user_id: str) -> Dict[str, Any]:
         """
         Fetches user profile by user ID.
         :param user_id: The ID of the user to look up.
         """
-        logger.info(f"Tool 'get_user_profile' called for user_id: {user_id}")
+        logger.info(f"Tool 'get_twitter_user_profile' called for user_id: {user_id}")
         try:
             response: Response = twitter_manager.v2.get_user(
                 id=user_id,
@@ -121,13 +136,13 @@ def register_twitter_tools(mcp):
             logger.error(f"Error getting user by screen name {screen_name}: {e}")
             return {"error": "Failed to fetch user", "message": str(e)}
 
-    @mcp.tool(name="get_user_by_id", description="Fetches a user by their ID (same as get_user_profile).")
+    @mcp.tool(name="get_user_by_id", description="Fetches a user by their ID (same as get_twitter_user_profile).")
     async def get_user_by_id(user_id: str) -> Dict[str, Any]:
         """
         Fetches user by ID.
         :param user_id: The ID of the user to look up.
         """
-        return await get_user_profile(user_id)
+        return await get_twitter_user_profile(user_id)
 
     @mcp.tool(name="get_user_followers", description="Retrieves a list of followers for a given user.")
     async def get_user_followers(user_id: str, count: int = 100) -> List[Dict[str, Any]]:

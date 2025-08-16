@@ -352,6 +352,7 @@ class AgentManager:
             "finance": {"url": "http://localhost:9001/mcp/", "transport": "streamable_http"},
             "rag": {"url": "http://localhost:9002/mcp/", "transport": "streamable_http"},
             "crawler": {"url": "http://localhost:9005/mcp/", "transport": "streamable_http"},
+            "social": {"url": "http://localhost:9006/mcp/", "transport": "streamable_http"},
         }
 
         if not local_mode:
@@ -359,6 +360,8 @@ class AgentManager:
             agent_mcp_config["finance"]["url"] = "http://finance-mcp:9001/mcp/"
             agent_mcp_config["rag"]["url"] = "http://rag-mcp:9002/mcp/"
             agent_mcp_config["crawler"]["url"] = "http://crawler-mcp:9005/mcp/"
+            agent_mcp_config["social"]["url"] = "http://social-mcp:9006/mcp/"
+
 
         discord_bot_id = None
         telegram_bot_id = None

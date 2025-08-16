@@ -1,8 +1,10 @@
-import os
 import logging
 from fastapi import FastAPI
 from fastmcp import FastMCP
 from dotenv import load_dotenv
+
+# Import the new SocialManager class
+from mcp_servers.social_mcp.core.social_manager import SocialManager
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -11,22 +13,18 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Import tool registration functions
-from mcp_servers.social_mcp.tools.reddit_tools import register_reddit_tools
-from mcp_servers.social_mcp.tools.tiktok_tools import register_tiktok_tools
-from mcp_servers.social_mcp.tools.twitter_tools import register_twitter_tools
-
 # Define the FastMCP server with a unique name
-mcp = FastMCP(name="social_mcp")
+mcp = FastMCP(
+    name="social_mcp",
+)
 
-# Register all the tools from the different modules
-register_reddit_tools(mcp)
-register_tiktok_tools(mcp)
-register_twitter_tools(mcp)
+# Initialize and register tools using the new manager class
+social_manager = SocialManager(mcp_instance=mcp)
+social_manager.register_social_tools()
 
-# Mount the MCP server to a FastAPI app
+# Mount the MCP server
 http_mcp = mcp.http_app(transport="streamable-http")
-app = FastAPI()
+app = FastAPI(lifespan=http_mcp.router.lifespan_context)
 app.mount("/", http_mcp)
 
 @app.get("/health")

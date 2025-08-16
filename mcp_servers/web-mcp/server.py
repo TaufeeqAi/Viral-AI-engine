@@ -185,3 +185,4 @@ async def google_search(query: str, num_results: int = 5) -> dict:
 http_mcp = mcp.http_app(transport="streamable-http")
 app = FastAPI(lifespan=http_mcp.router.lifespan_context)
 app.mount("/", http_mcp)
+ 

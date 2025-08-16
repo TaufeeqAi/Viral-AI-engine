@@ -6,7 +6,7 @@ import os
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, HttpUrl
 from TikTokApi import TikTokApi
-from TikTokApi.exceptions import TikTokNotFoundError, TikTokChallengeError
+# Use generic Exception handling instead of specific TikTokAPIError
 from dotenv import load_dotenv
 
 # --- Important Note on Unofficial API ---
@@ -63,7 +63,7 @@ def register_tiktok_tools(mcp):
             api = await TikTokClient.get_instance()
             user_info = await api.user(username=username).info()
             return user_info.as_dict
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting user profile for {username}: {e}")
             return {"error": "Failed to fetch user profile", "message": str(e)}
 
@@ -80,7 +80,7 @@ def register_tiktok_tools(mcp):
             user_videos = api.user(username=username).videos()
             videos_list = [v.as_dict for v in await anext(user_videos)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting videos for {username}: {e}")
             return {"error": "Failed to fetch user videos", "message": str(e)}
         except StopAsyncIteration:
@@ -97,7 +97,7 @@ def register_tiktok_tools(mcp):
             api = await TikTokClient.get_instance()
             video_info = await api.video(url=url).info()
             return video_info.as_dict
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting video details for {url}: {e}")
             return {"error": "Failed to fetch video details", "message": str(e)}
 
@@ -114,7 +114,7 @@ def register_tiktok_tools(mcp):
             video_comments = api.video(url=url).comments()
             comments_list = [c.as_dict for c in await anext(video_comments)]
             return comments_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting comments for {url}: {e}")
             return {"error": "Failed to fetch comments", "message": str(e)}
         except StopAsyncIteration:
@@ -133,7 +133,7 @@ def register_tiktok_tools(mcp):
             trending_videos = api.trending.videos()
             videos_list = [v.as_dict for v in await anext(trending_videos)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting trending videos: {e}")
             return {"error": "Failed to fetch trending videos", "message": str(e)}
         except StopAsyncIteration:
@@ -152,7 +152,7 @@ def register_tiktok_tools(mcp):
             search_results = api.search.videos(keyword=query)
             videos_list = [v.as_dict for v in await anext(search_results)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error searching for videos with query '{query}': {e}")
             return {"error": "Failed to perform video search", "message": str(e)}
         except StopAsyncIteration:
@@ -171,7 +171,7 @@ def register_tiktok_tools(mcp):
             search_results = api.search.users(keyword=query)
             users_list = [u.as_dict for u in await anext(search_results)]
             return users_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error searching for users with query '{query}': {e}")
             return {"error": "Failed to perform user search", "message": str(e)}
         except StopAsyncIteration:
@@ -190,7 +190,7 @@ def register_tiktok_tools(mcp):
             hashtag_videos = api.hashtag(name=hashtag).videos()
             videos_list = [v.as_dict for v in await anext(hashtag_videos)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting videos for hashtag '{hashtag}': {e}")
             return {"error": "Failed to fetch hashtag videos", "message": str(e)}
         except StopAsyncIteration:
@@ -210,7 +210,7 @@ def register_tiktok_tools(mcp):
             sound_videos = api.sound(id=sound_id).videos()
             videos_list = [v.as_dict for v in await anext(sound_videos)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting videos for sound_id '{sound_id}': {e}")
             return {"error": "Failed to fetch sound videos", "message": str(e)}
         except StopAsyncIteration:
@@ -231,7 +231,7 @@ def register_tiktok_tools(mcp):
             trending_videos = api.trending.videos(region=region)
             videos_list = [v.as_dict for v in await anext(trending_videos)]
             return videos_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting trending videos for region '{region}': {e}")
             return {"error": "Failed to fetch regional trending videos", "message": str(e)}
         except StopAsyncIteration:
@@ -254,7 +254,7 @@ def register_tiktok_tools(mcp):
                 "video_count": metrics.get("stats", {}).get("videoCount"),
                 "view_count": metrics.get("stats", {}).get("viewCount"),
             }
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting hashtag metrics for '{hashtag}': {e}")
             return {"error": "Failed to fetch hashtag metrics", "message": str(e)}
 
@@ -277,7 +277,7 @@ def register_tiktok_tools(mcp):
                 "share_count": metrics.get("shareCount"),
                 "view_count": metrics.get("playCount"),
             }
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting video metrics for {url}: {e}")
             return {"error": "Failed to fetch video metrics", "message": str(e)}
 
@@ -319,7 +319,7 @@ def register_tiktok_tools(mcp):
             followers_iter = api.user(username=username).followers()
             followers_list = [f.as_dict for f in await anext(followers_iter)]
             return followers_list[:count]
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting followers for {username}: {e}")
             return {"error": "Failed to fetch user followers", "message": str(e)}
         except StopAsyncIteration:
@@ -346,6 +346,6 @@ def register_tiktok_tools(mcp):
                 if len(videos_stats) >= count:
                     break
             return videos_stats
-        except (TikTokNotFoundError, TikTokChallengeError) as e:
+        except Exception as e:  # Use generic Exception instead of TikTokAPIError
             logger.error(f"Error getting user video stats for {username}: {e}")
             return {"error": "Failed to fetch user video stats", "message": str(e)}
