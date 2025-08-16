@@ -1,0 +1,6 @@
+praw 
+pydantic 
+fastapi 
+python-dotenv
+Tweepy
+TikTokApi

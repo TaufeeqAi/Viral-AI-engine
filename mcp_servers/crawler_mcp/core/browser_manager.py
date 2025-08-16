@@ -1,3 +1,4 @@
+#mcp_servers\crawler_mcp\core\browser_manager.py
 import asyncio
 from playwright.async_api import async_playwright, Browser, Playwright
 import logging
